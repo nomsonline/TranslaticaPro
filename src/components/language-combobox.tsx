@@ -65,9 +65,13 @@ export function LanguageCombobox({
               {languagesList.map((language) => (
                 <CommandItem
                   key={language.value}
-                  value={language.value}
+                  value={language.label}
                   onSelect={(currentValue) => {
-                    onValueChange(currentValue);
+                    const selectedValue =
+                      languagesList.find(
+                        (lang) => lang.label.toLowerCase() === currentValue.toLowerCase()
+                      )?.value || '';
+                    onValueChange(selectedValue);
                     setOpen(false);
                   }}
                 >
