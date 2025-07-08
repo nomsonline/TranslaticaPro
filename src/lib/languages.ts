@@ -16,4 +16,9 @@ export const languages: Language[] = [
   { value: 'zh', label: 'Chinese (Simplified)' },
   { value: 'ar', label: 'Arabic' },
   { value: 'hi', label: 'Hindi' },
+  { value: 'fa', label: 'Persian' },
+  { value: 'nl', label: 'Dutch' },
+  { value: 'pl', label: 'Polish' },
+  { value: 'sv', label: 'Swedish' },
+  { value: 'tr', label: 'Turkish' },
 ];
