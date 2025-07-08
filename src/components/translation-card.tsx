@@ -13,19 +13,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { LanguageCombobox } from '@/components/language-combobox';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { languages, type Language } from '@/lib/languages';
 import { cn } from '@/lib/utils';
 import {
   ArrowLeft,
+  ArrowRight,
   Download,
   File as FileIcon,
   Presentation,
@@ -45,8 +41,11 @@ export function TranslationCard() {
   const [file, setFile] = useState<File | null>(null);
   const [fileDataUri, setFileDataUri] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
-  const [sourceLang, setSourceLang] = useState('auto');
+  
+  const [autoDetect, setAutoDetect] = useState(true);
+  const [sourceLang, setSourceLang] = useState('');
   const [targetLang, setTargetLang] = useState('');
+  const [detectedLangLabel, setDetectedLangLabel] = useState('');
 
   const [isTranslating, setIsTranslating] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -63,10 +62,22 @@ export function TranslationCard() {
 
   const { toast } = useToast();
 
+  const handleAutoDetectChange = (checked: boolean) => {
+    setAutoDetect(checked);
+    setSourceLang('');
+    setDetectedLangLabel('');
+  };
+
   const handleFileSelect = useCallback(
     (selectedFile: File) => {
       setFile(selectedFile);
       setIsExtracting(true);
+      setDetectedLangLabel('');
+      if (!autoDetect) {
+        setSourceLang('');
+      }
+
+
       const reader = new FileReader();
       reader.onload = async (e) => {
         const dataUri = e.target?.result as string;
@@ -78,20 +89,21 @@ export function TranslationCard() {
           });
           setOriginalText(extractedText);
 
-          if (sourceLang === 'auto') {
+          if (autoDetect) {
             setIsDetecting(true);
             try {
               const result = await detectSourceLanguage({ text: extractedText });
-              const detectedLang = languages.find(
+              const detectedLangInfo = languages.find(
                 (l) =>
                   l.label.toLowerCase() === result.languageCode.toLowerCase() ||
                   l.value.toLowerCase() === result.languageCode.toLowerCase()
               );
-              if (detectedLang) {
-                setSourceLang(detectedLang.value);
+              if (detectedLangInfo) {
+                setSourceLang(detectedLangInfo.value);
+                setDetectedLangLabel(detectedLangInfo.label);
                 toast({
                   title: 'Language Detected',
-                  description: `Source language set to ${detectedLang.label}.`,
+                  description: `Source language set to ${detectedLangInfo.label}.`,
                 });
               }
             } catch (error) {
@@ -128,7 +140,7 @@ export function TranslationCard() {
       };
       reader.readAsDataURL(selectedFile);
     },
-    [sourceLang, toast]
+    [autoDetect, toast]
   );
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,13 +184,12 @@ export function TranslationCard() {
     setTranslatedText('');
     setTranslatedDocumentData(null);
     setQualityHints('');
-    if (sourceLang !== 'auto') {
-      setSourceLang('auto');
-    }
+    setSourceLang('');
+    setDetectedLangLabel('');
   };
 
   const handleTranslate = async () => {
-    if (!file || !originalText || !targetLang || sourceLang === 'auto' || !fileDataUri) return;
+    if (!file || !originalText || !targetLang || !sourceLang || !fileDataUri) return;
     setIsTranslating(true);
     setTranslatedText('');
     setTranslatedDocumentData(null);
@@ -259,7 +270,7 @@ export function TranslationCard() {
     if (
       !originalText ||
       !translatedText ||
-      sourceLang === 'auto' ||
+      !sourceLang ||
       !targetLang
     ) {
       toast({
@@ -293,22 +304,13 @@ export function TranslationCard() {
     }
   };
 
-  const sourceLanguages = useMemo(
-    () => [{ value: 'auto', label: 'Auto-detect' }, ...languages],
-    []
-  );
+  const sourceLanguages = useMemo(() => languages, []);
   const targetLanguages = useMemo(
     () => languages.filter((l) => l.value !== sourceLang),
     [sourceLang]
   );
 
   const isLoading = isExtracting || isDetecting || isTranslating;
-  const loadingText = useMemo(() => {
-    if (isExtracting) return 'Extracting Text...';
-    if (isDetecting) return 'Detecting Language...';
-    if (isTranslating) return 'Translating...';
-    return 'Translate';
-  }, [isExtracting, isDetecting, isTranslating]);
 
   if (view === 'preview') {
     return (
@@ -444,57 +446,49 @@ export function TranslationCard() {
             </div>
           )}
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="source-lang">Source Language</Label>
-              <Select
-                value={sourceLang}
-                onValueChange={setSourceLang}
-                disabled={isDetecting || isExtracting}
-              >
-                <SelectTrigger id="source-lang">
-                  <SelectValue placeholder="Select language" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sourceLanguages.map((lang) => (
-                    <SelectItem key={lang.value} value={lang.value}>
-                      {lang.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+               <LanguageCombobox
+                  value={sourceLang}
+                  onValueChange={setSourceLang}
+                  disabled={autoDetect || isLoading}
+                  placeholder={autoDetect ? (detectedLangLabel || 'Auto-detect') : 'Select source language'}
+                  languagesList={sourceLanguages}
+                  aria-label="Select source language"
+                />
             </div>
+            
+            <div className="flex items-center justify-center space-x-2">
+              <Label htmlFor="auto-detect-switch">Auto-detect</Label>
+              <Switch id="auto-detect-switch" checked={autoDetect} onCheckedChange={handleAutoDetectChange} disabled={isLoading} />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="target-lang">Target Language</Label>
-              <Select
-                value={targetLang}
-                onValueChange={setTargetLang}
-                disabled={isLoading}
-              >
-                <SelectTrigger id="target-lang">
-                  <SelectValue placeholder="Select language" />
-                </SelectTrigger>
-                <SelectContent>
-                  {targetLanguages.map((lang) => (
-                    <SelectItem key={lang.value} value={lang.value}>
-                      {lang.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+               <LanguageCombobox
+                  value={targetLang}
+                  onValueChange={setTargetLang}
+                  disabled={isLoading}
+                  placeholder="Select target language"
+                  languagesList={targetLanguages}
+                  aria-label="Select target language"
+                />
             </div>
           </div>
 
           <Button
             size="lg"
             className="w-full"
-            disabled={!file || !targetLang || isLoading}
+            disabled={!file || !targetLang || isLoading || !sourceLang}
             onClick={handleTranslate}
           >
-            {isLoading && (
+            {isLoading ? (
               <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <ArrowRight className="mr-2 h-5 w-5" />
             )}
-            {loadingText}
+            Translate Document
           </Button>
         </div>
       </CardContent>
