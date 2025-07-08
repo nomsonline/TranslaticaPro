@@ -25,7 +25,7 @@ import {
   ArrowLeft,
   Download,
   File as FileIcon,
-  FilePresentation,
+  Presentation,
   FileSpreadsheet,
   FileText,
   LoaderCircle,
@@ -265,7 +265,7 @@ export function TranslationCard() {
                   <FileText />
                   <FileIcon />
                   <FileSpreadsheet />
-                  <FilePresentation />
+                  <Presentation />
                 </div>
                 <input type="file" id="file-upload" className="hidden" onChange={onFileChange} />
               </div>
