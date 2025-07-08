@@ -1,7 +1,9 @@
 'use client';
 
 import { detectSourceLanguage } from '@/ai/flows/auto-detect-source-language';
+import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document';
 import { generateTranslationQualityHints } from '@/ai/flows/generate-translation-quality-hints';
+import { translateText } from '@/ai/flows/translate-text';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -44,8 +46,10 @@ export function TranslationCard() {
   const [sourceLang, setSourceLang] = useState('auto');
   const [targetLang, setTargetLang] = useState('');
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+
 
   const [originalText, setOriginalText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
@@ -58,37 +62,57 @@ export function TranslationCard() {
   const handleFileSelect = useCallback(
     (selectedFile: File) => {
       setFile(selectedFile);
+      setIsExtracting(true);
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const text = e.target?.result as string;
-        setOriginalText(text);
+        const dataUri = e.target?.result as string;
+        
+        try {
+          const { extractedText } = await extractTextFromDocument({ documentDataUri: dataUri });
+          setOriginalText(extractedText);
+          toast({
+            title: 'Text Extracted',
+            description: 'Successfully extracted text from your document.',
+          });
 
-        if (sourceLang === 'auto') {
-          setIsDetecting(true);
-          try {
-            const result = await detectSourceLanguage({ text });
-            const detectedLang = languages.find(
-              (l) =>
-                l.label.toLowerCase() === result.languageCode.toLowerCase() ||
-                l.value.toLowerCase() === result.languageCode.toLowerCase()
-            );
-            if (detectedLang) {
-              setSourceLang(detectedLang.value);
+          if (sourceLang === 'auto') {
+            setIsDetecting(true);
+            try {
+              const result = await detectSourceLanguage({ text: extractedText });
+              const detectedLang = languages.find(
+                (l) =>
+                  l.label.toLowerCase() === result.languageCode.toLowerCase() ||
+                  l.value.toLowerCase() === result.languageCode.toLowerCase()
+              );
+              if (detectedLang) {
+                setSourceLang(detectedLang.value);
+                toast({
+                  title: 'Language Detected',
+                  description: `Source language set to ${detectedLang.label}.`,
+                });
+              }
+            } catch (error) {
+              console.error('Language detection failed:', error);
               toast({
-                title: 'Language Detected',
-                description: `Source language set to ${detectedLang.label}.`,
+                variant: 'destructive',
+                title: 'Detection Failed',
+                description: 'Could not auto-detect the language.',
               });
+            } finally {
+              setIsDetecting(false);
             }
-          } catch (error) {
-            console.error('Language detection failed:', error);
-            toast({
-              variant: 'destructive',
-              title: 'Detection Failed',
-              description: 'Could not auto-detect the language.',
-            });
-          } finally {
-            setIsDetecting(false);
           }
+
+        } catch (error) {
+          console.error('Text extraction failed:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Extraction Failed',
+            description: 'Could not extract text from the document. Please try a different file.',
+          });
+          clearFile();
+        } finally {
+          setIsExtracting(false);
         }
       };
       reader.onerror = () => {
@@ -97,8 +121,9 @@ export function TranslationCard() {
           title: 'File Error',
           description: 'Failed to read the file.',
         });
+        setIsExtracting(false);
       };
-      reader.readAsText(selectedFile);
+      reader.readAsDataURL(selectedFile);
     },
     [sourceLang, toast]
   );
@@ -140,23 +165,52 @@ export function TranslationCard() {
   const clearFile = () => {
     setFile(null);
     setOriginalText('');
+    setTranslatedText('');
+    setQualityHints('');
     if (sourceLang !== 'auto') {
       setSourceLang('auto');
     }
   };
 
   const handleTranslate = async () => {
-    if (!file || !targetLang) return;
-    setIsLoading(true);
-    // Simulate translation API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    const mockTranslation = `(Translated) ${originalText
-      .split('')
-      .reverse()
-      .join('')}`;
-    setTranslatedText(mockTranslation);
-    setIsLoading(false);
-    setView('preview');
+    if (!originalText || !targetLang || sourceLang === 'auto') return;
+    setIsTranslating(true);
+    try {
+      const result = await translateText({
+        text: originalText,
+        sourceLanguage: languages.find(l => l.value === sourceLang)?.label || sourceLang,
+        targetLanguage: languages.find(l => l.value === targetLang)?.label || targetLang,
+      });
+      setTranslatedText(result.translatedText);
+      setView('preview');
+    } catch (error) {
+      console.error('Translation failed:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Translation Failed',
+        description: 'An error occurred during translation.',
+      });
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!translatedText || !file) return;
+
+    const blob = new Blob([translatedText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    const originalFilename = file.name.substring(0, file.name.lastIndexOf('.'));
+    const targetLangLabel = languages.find(l => l.value === targetLang)?.label || targetLang;
+    link.download = `${originalFilename}_translated_to_${targetLangLabel}.txt`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleGetQualityHints = async () => {
@@ -193,6 +247,13 @@ export function TranslationCard() {
   const sourceLanguages = useMemo(() => [{ value: 'auto', label: 'Auto-detect' }, ...languages], []);
   const targetLanguages = useMemo(() => languages.filter(l => l.value !== sourceLang), [sourceLang]);
 
+  const isLoading = isExtracting || isDetecting || isTranslating;
+  const loadingText = useMemo(() => {
+    if (isExtracting) return 'Extracting Text...';
+    if (isDetecting) return 'Detecting Language...';
+    if (isTranslating) return 'Translating...';
+    return 'Translate';
+  }, [isExtracting, isDetecting, isTranslating]);
 
   if (view === 'preview') {
     return (
@@ -221,7 +282,7 @@ export function TranslationCard() {
                       </div>
                   </PopoverContent>
                 </Popover>
-                <Button size="sm">
+                <Button size="sm" onClick={handleDownload}>
                   <Download className="mr-2 h-4 w-4" />
                   Download
                 </Button>
@@ -267,7 +328,7 @@ export function TranslationCard() {
                   <FileSpreadsheet />
                   <Presentation />
                 </div>
-                <input type="file" id="file-upload" className="hidden" onChange={onFileChange} />
+                <input type="file" id="file-upload" className="hidden" onChange={onFileChange} accept=".txt,.pdf,.docx,.xlsx,.pptx" />
               </div>
           ) : (
             <div className="flex items-center justify-between rounded-lg border p-4">
@@ -287,7 +348,7 @@ export function TranslationCard() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="source-lang">Source Language</Label>
-              <Select value={sourceLang} onValueChange={setSourceLang} disabled={isDetecting}>
+              <Select value={sourceLang} onValueChange={setSourceLang} disabled={isDetecting || isExtracting}>
                 <SelectTrigger id="source-lang">
                   <SelectValue placeholder="Select language" />
                 </SelectTrigger>
@@ -302,7 +363,7 @@ export function TranslationCard() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="target-lang">Target Language</Label>
-              <Select value={targetLang} onValueChange={setTargetLang}>
+              <Select value={targetLang} onValueChange={setTargetLang} disabled={isLoading}>
                 <SelectTrigger id="target-lang">
                   <SelectValue placeholder="Select language" />
                 </SelectTrigger>
@@ -320,11 +381,11 @@ export function TranslationCard() {
           <Button
             size="lg"
             className="w-full"
-            disabled={!file || !targetLang || isLoading || isDetecting}
+            disabled={!file || !targetLang || isLoading}
             onClick={handleTranslate}
           >
-            {(isLoading || isDetecting) && <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />}
-            {isLoading ? 'Translating...' : isDetecting ? 'Detecting...' : 'Translate'}
+            {isLoading && <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />}
+            {loadingText}
           </Button>
         </div>
       </CardContent>
