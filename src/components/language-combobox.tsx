@@ -65,13 +65,13 @@ export function LanguageCombobox({
               {languagesList.map((language) => (
                 <CommandItem
                   key={language.value}
-                  value={language.label}
                   onSelect={(currentValue) => {
-                    const selectedValue =
-                      languagesList.find(
-                        (lang) => lang.label.toLowerCase() === currentValue.toLowerCase()
-                      )?.value || '';
-                    onValueChange(selectedValue);
+                    const selected = languagesList.find(
+                      (lang) => lang.label.toLowerCase() === currentValue
+                    );
+                    if (selected) {
+                      onValueChange(selected.value);
+                    }
                     setOpen(false);
                   }}
                 >
