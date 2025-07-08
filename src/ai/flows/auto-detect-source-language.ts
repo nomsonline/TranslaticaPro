@@ -55,8 +55,28 @@ const detectSourceLanguageFlow = ai.defineFlow(
     inputSchema: DetectSourceLanguageInputSchema,
     outputSchema: DetectSourceLanguageOutputSchema,
   },
-  async input => {
-    const {output} = await detectSourceLanguagePrompt(input);
-    return output!;
+  async (input) => {
+    let retries = 3;
+    let delay = 1000;
+    while (retries > 0) {
+      try {
+        const { output } = await detectSourceLanguagePrompt(input);
+        return output!;
+      } catch (e) {
+        const error = e as Error;
+        if (error.message && error.message.includes('503')) {
+          retries--;
+          if (retries === 0) {
+            throw error;
+          }
+          await new Promise((r) => setTimeout(r, delay));
+          delay *= 2;
+        } else {
+          throw error;
+        }
+      }
+    }
+    // This part is for type-safety, it should not be reached.
+    throw new Error('Failed to detect language after multiple retries.');
   }
 );
