@@ -65,9 +65,9 @@ export function LanguageCombobox({
               {languagesList.map((language) => (
                 <CommandItem
                   key={language.value}
-                  value={language.value}
-                  onSelect={(currentValue) => {
-                    onValueChange(currentValue);
+                  value={language.label}
+                  onSelect={() => {
+                    onValueChange(language.value);
                     setOpen(false);
                   }}
                 >
