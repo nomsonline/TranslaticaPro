@@ -10,7 +10,6 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandInput,
-  CommandItem,
   CommandList,
 } from '@/components/ui/command';
 import {
@@ -67,7 +66,7 @@ export function LanguageCombobox({
                   key={language.value}
                   onSelect={(currentValue) => {
                     const selected = languagesList.find(
-                      (lang) => lang.label.toLowerCase() === currentValue
+                      (lang) => lang.label.toLowerCase() === currentValue.toLowerCase()
                     );
                     if (selected) {
                       onValueChange(selected.value);

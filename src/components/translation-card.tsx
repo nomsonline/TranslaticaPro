@@ -478,7 +478,6 @@ export function TranslationCard() {
               <LanguageCombobox
                 value={sourceLang}
                 onValueChange={setSourceLang}
-                disabled={autoDetect || isLoading}
                 placeholder={
                   autoDetect
                     ? detectedLangLabel || 'Auto-detect'
@@ -494,7 +493,6 @@ export function TranslationCard() {
               <LanguageCombobox
                 value={targetLang}
                 onValueChange={setTargetLang}
-                disabled={isLoading}
                 placeholder="Select target language"
                 languagesList={targetLanguages}
                 aria-label="Select target language"
