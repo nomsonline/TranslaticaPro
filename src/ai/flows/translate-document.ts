@@ -41,10 +41,7 @@ const translateDocumentFlow = ai.defineFlow(
   async (input) => {
     const translationClient = new TranslationServiceClient();
 
-    const projectId = process.env.GCLOUD_PROJECT;
-    if (!projectId) {
-      throw new Error('GCLOUD_PROJECT environment variable not set.');
-    }
+    const projectId = await translationClient.getProjectId();
     const location = 'us-central1';
 
     const content = input.documentDataUri.split(',')[1];
